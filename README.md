@@ -95,6 +95,11 @@ erasing anything.
 loaded, search timeout) could be automatically re-attempted at the end of the
 run rather than requiring a manual rerun.
 
+**Flexible CSV column handling** — currently the batch script expects a column 
+named exactly `Serial` in a fixed position. Replacing this with case-insensitive 
+header matching and position-independent column detection would make the script 
+more resilient to variations in how the CSV is exported or named.
+
 **File picker dialog** — currently the batch script looks for a fixed
 `devices.csv` in the project folder. A native macOS file picker dialog would
 allow any CSV to be selected at runtime, making the workflow more flexible and
