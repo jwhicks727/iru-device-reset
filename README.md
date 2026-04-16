@@ -5,7 +5,7 @@
 
 ## The Problem
 
-At SOAR Charter Academy, wiping and re-enrolling iPads is an important part of daily device workflow -- as a troubleshooting step, at a teacher's request to get a "fresh start" with their class devices, at times for the whole fleet between school years. Accomplishing this is a multi-step manual 
+At SOAR Charter Academy, wiping and re-enrolling iPads is an important part of daily device workflow -- as a troubleshooting step, at a teacher's request to get a "fresh start" with their class devices, at times for the whole fleet between school years. Accomplishing this is a multi-step manual
 process through our MDM platform's web interface — open the device, navigate
 menus, confirm multiple dialogs, select a Wi-Fi profile, type a confirmation
 word, submit. Manageable for one device, but creates a time-expensive friction point for an entire
@@ -79,3 +79,34 @@ with instructions to rerun rather than just appearing as a generic failure.
 
 In active use at SOAR Charter Academy. Stress tested across several 4-device
 batch runs, and now in use for full classes and fleet resets as necessary.
+
+---
+
+## Future Development
+
+Several improvements are planned for future versions:
+
+**Dry run mode** — a flag that runs the full sequence for each device,
+verifying it can find every element and navigate every step, but stops short
+of the final confirmation. Allows a batch to be validated without actually
+erasing anything.
+
+**Retry queue** — devices that fail for recoverable reasons (Wi-Fi profile not
+loaded, search timeout) could be automatically re-attempted at the end of the
+run rather than requiring a manual rerun.
+
+**File picker dialog** — currently the batch script looks for a fixed
+`devices.csv` in the project folder. A native macOS file picker dialog would
+allow any CSV to be selected at runtime, making the workflow more flexible and
+less dependent on file placement.
+
+**Standalone application** — packaging the scripts as a self-contained desktop
+application (macOS and potentially Windows) would allow a non-technical user to
+run the automation without needing Python, a terminal, or any development
+environment. Tools like PyInstaller or py2app make this possible from existing
+Python code.
+
+**Multi-organization support** — the school subdomain, Wi-Fi profile name, and
+file paths are currently hardcoded constants. Abstracting these into a config
+file would allow the script to work across multiple Iru organizations without
+code changes.
