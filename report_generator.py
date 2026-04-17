@@ -37,6 +37,14 @@ def generate_reports(results, run_timestamp=None, dry_run=False):
     run_type = "Dry Run Validation" if dry_run else "Device Erase"
     status_label = "Validated" if dry_run else "Erased"
 
+    # ── Analyze retry information ────────────────────────────────────────────
+    # Count devices that succeeded on retry vs failed after retry
+    successful_retries = sum(1 for _, success, reason in results 
+                           if success and "Success on retry" in reason)
+    failed_after_retry = sum(1 for _, success, reason in results 
+                           if not success and "original:" in reason)
+    total_retries_attempted = successful_retries + failed_after_retry
+
     # ── Categorize failures ──────────────────────────────────────────────────
     # Separate Wi-Fi profile failures from other failures for special reporting
     wifi_retry = [(s, r) for s, ok, r in results
@@ -50,10 +58,17 @@ def generate_reports(results, run_timestamp=None, dry_run=False):
         writer = csv.writer(f)
         writer.writerow(["Serial Number", "Result", "Notes", "Run Type", "Run Time"])
         for serial, success, reason in results:
+            # Add retry indicator to notes if applicable
+            retry_indicator = ""
+            if "Success on retry" in reason:
+                retry_indicator = " [RETRIED]"
+            elif "original:" in reason:
+                retry_indicator = " [RETRY FAILED]"
+            
             writer.writerow([
                 serial,
                 status_label if success else "Failed",
-                "" if success else reason,
+                ("" if success else reason) + retry_indicator,
                 "Dry Run" if dry_run else "Production",
                 run_time_str
             ])
@@ -67,9 +82,17 @@ def generate_reports(results, run_timestamp=None, dry_run=False):
         row_color = "#e6f4ea" if success else "#fce8e6"
         status_color = "#2d7a3a" if success else "#c0392b"
         note = "" if success else reason
+        
+        # Add retry styling for retried devices
+        retry_badge = ""
+        if "Success on retry" in reason:
+            retry_badge = ' <span style="background-color: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px;">RETRIED</span>'
+        elif "original:" in reason:
+            retry_badge = ' <span style="background-color: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 3px; font-size: 11px;">RETRY FAILED</span>'
+        
         rows_html += f"""
         <tr style="background-color: {row_color};">
-            <td>{serial}</td>
+            <td>{serial}{retry_badge}</td>
             <td style="color: {status_color}; font-weight: bold;">{status}</td>
             <td style="color: #666; font-size: 13px;">{note}</td>
         </tr>
@@ -89,6 +112,35 @@ def generate_reports(results, run_timestamp=None, dry_run=False):
             <ul>
                 {retry_rows}
             </ul>
+        </div>
+        """
+
+    # ── Build retry summary section ───────────────────────────────────────────
+    # Show retry statistics if any retries were attempted
+    retry_summary_html = ""
+    if total_retries_attempted > 0:
+        retry_percentage = (successful_retries / total_retries_attempted * 100) if total_retries_attempted > 0 else 0
+        retry_summary_html = f"""
+        <div class="retry-summary">
+            <h2>🔄 Automatic Retry Results</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">{total_retries_attempted}</div>
+                    <div class="stat-label">Devices Retried</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" style="color: #2d7a3a;">{successful_retries}</div>
+                    <div class="stat-label">Successful Retries</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" style="color: #c0392b;">{failed_after_retry}</div>
+                    <div class="stat-label">Failed After Retry</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{retry_percentage:.1f}%</div>
+                    <div class="stat-label">Retry Success Rate</div>
+                </div>
+            </div>
         </div>
         """
 
@@ -194,6 +246,36 @@ def generate_reports(results, run_timestamp=None, dry_run=False):
                 color: #856404;
                 text-align: center;
             }}
+            .retry-summary {{
+                margin-top: 32px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                padding: 20px 24px;
+            }}
+            .retry-summary h2 {{
+                margin-bottom: 16px;
+                color: #1a1a1a;
+            }}
+            .stats-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 16px;
+            }}
+            .stat-item {{
+                text-align: center;
+            }}
+            .stat-number {{
+                font-size: 24px;
+                font-weight: bold;
+                color: #1a1a1a;
+            }}
+            .stat-label {{
+                font-size: 11px;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-top: 4px;
+            }}
         </style>
     </head>
     <body>
@@ -230,6 +312,8 @@ def generate_reports(results, run_timestamp=None, dry_run=False):
         </table>
 
         {wifi_retry_html}
+
+        {retry_summary_html}
 
         <div class="footer">
             Generated by iru-device-reset automation &nbsp;·&nbsp; SOAR Charter Academy

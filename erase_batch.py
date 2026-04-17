@@ -9,6 +9,32 @@ from erase_one_device import start_driver, navigate_to_devices, erase_device, fi
 CSV_FILE = "devices.csv"
 
 
+# ── Helper Functions ───────────────────────────────────────────────────────────
+
+def is_recoverable_failure(reason):
+    """Determine if a failure reason indicates a recoverable error that should be retried.
+    
+    Args:
+        reason: The failure reason string from erase_device
+        
+    Returns:
+        True if the failure is recoverable and should be retried, False otherwise
+    """
+    recoverable_indicators = [
+        "Wi-Fi profile not loaded",
+        "Search field not found",  # Might be timing issue
+        "Device not found in search results",  # Might be temporary search issue
+        "Actions button not found",  # Page might not be fully loaded
+        "Erase device option not found",  # Dropdown might not be rendered
+        "Return to service checkbox not found",  # Dialog might not be ready
+        "Wi-Fi dropdown not found",  # Wi-Fi options not loaded yet
+        "Erase confirmation field not found",  # Form not fully rendered
+        "Confirm erase button not found"  # Final button not ready
+    ]
+    
+    return any(indicator in reason for indicator in recoverable_indicators)
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
@@ -98,6 +124,44 @@ def main():
                 navigate_to_devices(driver)
                 time.sleep(1)  # Extra buffer after navigation before next device
 
+        # ── Retry queue for recoverable failures ─────────────────────────────
+        # Automatically retry devices that failed for recoverable reasons
+        retry_candidates = [(s, r) for s, ok, r in results 
+                           if not ok and is_recoverable_failure(r)]
+        
+        if retry_candidates and not args.dry_run:
+            print(f"\n── Retry Queue ──────────────────────────────────────")
+            print(f"Found {len(retry_candidates)} device(s) with recoverable failures.")
+            print("Retrying automatically...")
+            
+            retry_results = []
+            for i, (serial, original_reason) in enumerate(retry_candidates):
+                print(f"\n── Retry {i + 1} of {len(retry_candidates)} ────────────────")
+                print(f"Retrying {serial} (original failure: {original_reason})")
+                
+                # Navigate back to devices page for retry
+                navigate_to_devices(driver)
+                time.sleep(1)
+                
+                try:
+                    success, reason = erase_device(driver, serial, dry_run=False)
+                except Exception as e:
+                    print(f"Unexpected error during retry for {serial}: {e}")
+                    success, reason = False, f"Retry failed: {e}"
+
+                retry_results.append((serial, success, reason))
+            
+            # Update main results with retry outcomes
+            for retry_serial, retry_success, retry_reason in retry_results:
+                # Find and update the original result
+                for j, (orig_serial, orig_success, orig_reason) in enumerate(results):
+                    if orig_serial == retry_serial:
+                        if retry_success:
+                            results[j] = (orig_serial, True, f"Success on retry (original: {orig_reason})")
+                        else:
+                            results[j] = (orig_serial, False, f"Retry failed: {retry_reason} (original: {orig_reason})")
+                        break
+
         # ── Summary ──────────────────────────────────────────────────────────
         run_mode = "Validation" if args.dry_run else "Erase"
         print(f"\n── {run_mode} Summary ────────────────────────────────────")
@@ -112,6 +176,16 @@ def main():
         else:
             action = "validated" if args.dry_run else "erased"
             print(f"\nAll {len(serials)} devices {action} successfully.")
+
+        # Show retry summary if retries were attempted
+        if not args.dry_run and retry_candidates:
+            successful_retries = sum(1 for s, ok, r in results 
+                                    if ok and "Success on retry" in r)
+            failed_retries = len(retry_candidates) - successful_retries
+            print(f"\n── Retry Summary ─────────────────────────────────────")
+            print(f"Devices retried: {len(retry_candidates)}")
+            print(f"Successful retries: {successful_retries}")
+            print(f"Failed retries: {failed_retries}")
 
         # ── Generate reports ─────────────────────────────────────────────────
         # Creates CSV, HTML, and PDF reports in a timestamped subfolder
