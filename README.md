@@ -38,13 +38,29 @@ separated.
 
 This was my second Python project and the first using the Selenium framework.
 
+Before any automation could begin, the MDM platform's authentication had to be 
+addressed. The Devices screen sits behind a Google SSO login with mandatory 
+two-step verification — a security layer that needed to be respected rather than 
+worked around. The solution uses a persistent browser profile that stores the 
+authenticated session after a single manual login. Subsequent runs open directly 
+to the dashboard without re-authenticating, while the underlying Google SSO and 
+2SV protections remain fully intact. When the session eventually expires, the 
+script detects the login redirect and pauses for manual re-authentication before 
+continuing.
+
 The MDM platform presented three distinct technical challenges:
 
 1. **Finding elements without clean identifiers** — some interactive elements
 had no name or aria-label, so finding them required writing JavaScript that
 searched by other means, like locating a button by its visible text.
 
-2. **Getting interactions to register** — even when the right element was found, standard Selenium clicks and text input sometimes didn't work as expected. Typed text would appear then disappear. Dropdown clicks wouldn't open the menu. I worked through each failure by observing the specific behavior, researching the cause, and testing alternatives — ultimately using ActionChains for clicks that needed to simulate realistic mouse movement, and JavaScript for input fields that required a different approach to accept and retain values.
+2. **Getting interactions to register** — even when the right element was found,
+standard Selenium clicks and text input sometimes didn't work as expected.
+Typed text would appear then disappear. Dropdown clicks wouldn't open the
+menu. I worked through each failure by observing the specific behavior,
+researching the cause, and testing alternatives — ultimately using ActionChains
+for clicks that needed to simulate realistic mouse movement, and JavaScript
+for input fields that required a different approach to accept and retain values.
 
 3. **Running efficiently without arbitrary delays** — page elements load at
 unpredictable speeds, so a fixed wait is either too slow or occasionally too
