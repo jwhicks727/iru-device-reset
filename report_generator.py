@@ -8,12 +8,13 @@ from weasyprint import HTML
 # Called by erase_batch.py at the end of each run.
 
 
-def generate_reports(results, run_timestamp=None):
-    """Generate CSV, HTML, and PDF reports from a batch erase run.
+def generate_reports(results, run_timestamp=None, dry_run=False):
+    """Generate CSV, HTML, and PDF reports from a batch erase or validation run.
 
     Args:
         results: list of (serial_number, success, reason) tuples
         run_timestamp: datetime object for the run (defaults to now)
+        dry_run: boolean indicating if this was a dry run validation (no devices erased)
 
     Returns:
         Path to the report folder that was created.
@@ -33,6 +34,8 @@ def generate_reports(results, run_timestamp=None):
     passed = sum(1 for _, success, _ in results if success)
     failed = total - passed
     run_time_str = run_timestamp.strftime("%B %d, %Y at %I:%M %p")
+    run_type = "Dry Run Validation" if dry_run else "Device Erase"
+    status_label = "Validated" if dry_run else "Erased"
 
     # ── Categorize failures ──────────────────────────────────────────────────
     # Separate Wi-Fi profile failures from other failures for special reporting
@@ -45,12 +48,13 @@ def generate_reports(results, run_timestamp=None):
     csv_path = os.path.join(report_dir, "erase_report.csv")
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Serial Number", "Result", "Notes", "Run"])
+        writer.writerow(["Serial Number", "Result", "Notes", "Run Type", "Run Time"])
         for serial, success, reason in results:
             writer.writerow([
                 serial,
-                "Erased" if success else "Failed",
+                status_label if success else "Failed",
                 "" if success else reason,
+                "Dry Run" if dry_run else "Production",
                 run_time_str
             ])
     print(f"CSV report saved: {csv_path}")
@@ -180,11 +184,22 @@ def generate_reports(results, run_timestamp=None):
                 font-size: 12px;
                 color: #999;
             }}
+            .dry-run-banner {{
+                background: #fff3cd;
+                border: 2px solid #ffc107;
+                border-radius: 8px;
+                padding: 16px 20px;
+                margin-bottom: 24px;
+                font-weight: 600;
+                color: #856404;
+                text-align: center;
+            }}
         </style>
     </head>
     <body>
-        <h1>Device Erase Report</h1>
+        <h1>{run_type} Report</h1>
         <p style="color: #666;">Run: {run_time_str}</p>
+        {f'<div class="dry-run-banner">⚠️ DRY RUN — NO DEVICES WERE ACTUALLY ERASED</div>' if dry_run else ''}
 
         <div class="summary">
             <div class="stat">
@@ -193,7 +208,7 @@ def generate_reports(results, run_timestamp=None):
             </div>
             <div class="stat passed">
                 <div class="number">{passed}</div>
-                <div class="label">Erased</div>
+                <div class="label">{status_label}</div>
             </div>
             <div class="stat failed">
                 <div class="number">{failed}</div>

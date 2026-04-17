@@ -1,3 +1,4 @@
+import argparse
 import time
 from selenium import webdriver
 from selenium.webdriver.edge.service import Service
@@ -67,9 +68,10 @@ def navigate_to_devices(driver):
         time.sleep(0.1)
     print("Back on Devices page.")
 
-def erase_device(driver, serial_number):
+def erase_device(driver, serial_number, dry_run=False):
     """Run the full erase sequence for a single device.
-    Accepts an already-running driver and a serial number string.
+    Accepts an already-running driver, a serial number string, and an optional dry_run flag.
+    If dry_run is True, validates all steps but skips the final confirmation button click.
     Returns a tuple of (success: bool, reason: str)."""
 
     print(f"\nStarting erase sequence for {serial_number}...")
@@ -273,6 +275,10 @@ def erase_device(driver, serial_number):
         print("Confirm erase button not found. Skipping.")
         return False, "Confirm erase button not found"
 
+    if dry_run:
+        print(f"[DRY RUN] Would erase device {serial_number} — all validation steps passed.")
+        return True, "Dry run validation successful"
+
     js_click(driver, confirm_button)
     print(f"Erase Device confirmed. Device wipe initiated for {serial_number}.")
     time.sleep(1)
@@ -283,15 +289,37 @@ def erase_device(driver, serial_number):
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
+    # ── Parse command-line arguments ───────────────────────────────────────
+    parser = argparse.ArgumentParser(description="Single device erase automation for Iru MDM")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Run validation without actually erasing the device")
+    args = parser.parse_args()
+
     driver, wait = start_driver()
 
     try:
         print("Opening Iru...")
         driver.get(IRU_URL)
+        
+        # Give redirects time to complete
+        time.sleep(2)
 
-        if "sign-in" in driver.current_url or "login" in driver.current_url or "auth" in driver.current_url:
-            print("Session expired — please log in manually.")
-            input("Press Enter once you are fully logged in...")
+        # Check if we landed on a login screen (by looking for auth-related URLs or login elements)
+        # Need to check multiple times since redirects may still be happening
+        logged_in = False
+        for attempt in range(10):
+            current_url = driver.current_url
+            # Check if we're on a login/auth page
+            if "sign-in" in current_url or "login" in current_url or "auth" in current_url or "accounts.google.com" in current_url:
+                print("Session expired — please log in manually in the browser window.")
+                input("Press Enter once you are fully logged in...")
+                logged_in = True
+                break
+            # Check if dashboard search field exists (means we're logged in)
+            elif find_element(driver, 'input[aria-label="Search"]'):
+                logged_in = True
+                break
+            time.sleep(0.2)
 
         print("Session active. Waiting for dashboard...")
         for attempt in range(50):
@@ -303,16 +331,18 @@ def main():
         # ── Serial Number Input ──────────────────────────────────────────────
         # Prompt the user to enter the serial number after the script is running
         # This keeps the terminal command generic (no arguments needed)
-        SERIAL_NUMBER = input("Enter serial number to erase: ").strip().upper()
+        run_mode = "validate (dry run)" if args.dry_run else "erase"
+        SERIAL_NUMBER = input(f"Enter serial number to {run_mode}: ").strip().upper()
         if not SERIAL_NUMBER:
             print("No serial number entered. Exiting.")
             return
 
-        success, reason = erase_device(driver, SERIAL_NUMBER)
+        success, reason = erase_device(driver, SERIAL_NUMBER, dry_run=args.dry_run)
         if success:
-            print(f"\nDevice erased successfully.")
+            action = "validated" if args.dry_run else "erased"
+            print(f"\nDevice {action} successfully.")
         else:
-            print(f"\nDevice erase failed: {reason}")
+            print(f"\nDevice {run_mode.split()[0]} failed: {reason}")
 
     except Exception as e:
         print("Unexpected error:", e)
