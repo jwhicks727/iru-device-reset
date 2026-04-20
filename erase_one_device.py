@@ -68,13 +68,21 @@ def navigate_to_devices(driver):
         time.sleep(0.1)
     print("Back on Devices page.")
 
-def erase_device(driver, serial_number, dry_run=False):
+def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
     """Run the full erase sequence for a single device.
-    Accepts an already-running driver, a serial number string, and an optional dry_run flag.
+    Accepts an already-running driver, a serial number string, and optional flags.
     If dry_run is True, validates all steps but skips the final confirmation button click.
+    If retry_attempt is True, uses longer delays to give the system more time to stabilize.
     Returns a tuple of (success: bool, reason: str)."""
 
+    # Use longer delays on retry attempts to give the system more time
+    base_delay = 1.0 if retry_attempt else 0.5
+    poll_delay = 0.2 if retry_attempt else 0.1
+    wait_multiplier = 2 if retry_attempt else 1
+
     print(f"\nStarting erase sequence for {serial_number}...")
+    if retry_attempt:
+        print("[RETRY ATTEMPT] Using extended delays...")
 
     # ── Step 1: Search for the device by serial number ──────────────────
     # Retry up to 3 times in case the search field isn't ready yet
@@ -91,7 +99,7 @@ def erase_device(driver, serial_number, dry_run=False):
         return False, "Search field not found"
 
     # Wait for device list to fully load before typing
-    time.sleep(0.5)
+    time.sleep(base_delay)
     set_input_value(driver, search_field, serial_number)
     print("Serial number entered.")
 
@@ -121,7 +129,7 @@ def erase_device(driver, serial_number, dry_run=False):
         if matched_device_link:
             break
 
-        time.sleep(0.1)
+        time.sleep(poll_delay)
 
     # ── Step 2: Click the device in the search results ──────────────────
     # Find the row whose visible text contains the serial, then click its link
@@ -147,7 +155,7 @@ def erase_device(driver, serial_number, dry_run=False):
 
     js_click(driver, actions_button)
     print("Actions menu opened.")
-    time.sleep(1.0)  # Allow dropdown to render before checking items
+    time.sleep(1.0 * wait_multiplier)  # Allow dropdown to render before checking items
 
     # Wait for the Actions dropdown to fully render including Erase device option
     # Simple presence check caused wrong item to be clicked (Lock device)
@@ -163,9 +171,9 @@ def erase_device(driver, serial_number, dry_run=False):
         """)
         if result:
             break
-        time.sleep(0.1)
+        time.sleep(poll_delay)
 
-    time.sleep(0.3)  # Small buffer after menu fully renders before clicking
+    time.sleep(0.3 * wait_multiplier)  # Small buffer after menu fully renders before clicking
 
     # ── Step 4: Click "Erase device" in the dropdown ────────────────────
     # No unique aria-label on this item, so we find it by its text content
@@ -189,7 +197,7 @@ def erase_device(driver, serial_number, dry_run=False):
     for attempt in range(50):
         if find_element(driver, '#return-to-service'):
             break
-        time.sleep(0.1)
+        time.sleep(poll_delay)
 
     # ── Step 5: Check the "Return to service" checkbox ───────────────────
     # Using the element's id attribute as the selector (# means id in CSS)
@@ -200,7 +208,7 @@ def erase_device(driver, serial_number, dry_run=False):
 
     js_click(driver, checkbox)
     print("Checkbox checked.")
-    time.sleep(0.5)  # Wait for Wi-Fi dropdown to become active after checking
+    time.sleep(base_delay)  # Wait for Wi-Fi dropdown to become active after checking
 
     # ── Step 6: Open the Wi-Fi profile dropdown ───────────────────────────
     # This is a combobox for selecting a Wi-Fi profile for re-enrollment
@@ -223,7 +231,7 @@ def erase_device(driver, serial_number, dry_run=False):
         """)
         if result:
             break
-        time.sleep(0.1)
+        time.sleep(poll_delay)
 
     # ── Step 7: Select "SOAR Charter" from the Wi-Fi profile dropdown ────
     # Radix UI renders dropdown options in a portal outside the main DOM
@@ -242,14 +250,14 @@ def erase_device(driver, serial_number, dry_run=False):
 
     js_click(driver, wifi_option)
     print("SOAR Charter Wi-Fi profile selected.")
-    time.sleep(0.5)  # Wait for selection to register before continuing
+    time.sleep(base_delay)  # Wait for selection to register before continuing
 
     # ── Step 8: Type ERASE in the confirmation field ─────────────────────
     # Wait for the field to appear after Wi-Fi selection
     for attempt in range(50):
         if find_element(driver, '[aria-label="erase-confirmation"]'):
             break
-        time.sleep(0.1)
+        time.sleep(poll_delay)
 
     erase_field = find_element(driver, '[aria-label="erase-confirmation"]')
     if not erase_field:
@@ -281,7 +289,7 @@ def erase_device(driver, serial_number, dry_run=False):
 
     js_click(driver, confirm_button)
     print(f"Erase Device confirmed. Device wipe initiated for {serial_number}.")
-    time.sleep(1)
+    time.sleep(1 * wait_multiplier)
 
     return True, "Success"
 

@@ -144,7 +144,7 @@ def main():
                 time.sleep(1)
                 
                 try:
-                    success, reason = erase_device(driver, serial, dry_run=False)
+                    success, reason = erase_device(driver, serial, dry_run=False, retry_attempt=True)
                 except Exception as e:
                     print(f"Unexpected error during retry for {serial}: {e}")
                     success, reason = False, f"Retry failed: {e}"
