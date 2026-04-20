@@ -77,23 +77,30 @@ with instructions to rerun rather than just appearing as a generic failure.
 
 ## Status
 
-In active use at SOAR Charter Academy. Stress tested across several 4-device
-batch runs, and now in use for full classes and fleet resets as necessary.
+In active use at SOAR Charter Academy. Stress tested across multiple batch runs
+with varying device counts. Production-proven with automatic retry capabilities
+for timing-related failures.
+
+---
+
+## Completed Features
+
+**✅ Dry run mode** — A `--dry-run` flag runs the full sequence for each device,
+verifying it can find every element and navigate every step, but stops short of
+the final confirmation. Allows a batch to be validated without actually erasing
+anything. Useful for testing and confidence-building before production runs.
+
+**✅ Retry queue** — Devices that fail for recoverable reasons (Wi-Fi profile not
+loaded, search timeouts, element rendering delays) are automatically re-attempted
+at the end of the run with extended delays (2x normal timing) to give the system
+more time to stabilize. No manual rerun needed. Success tracked in reports with
+`[RETRIED]` badges and retry statistics.
 
 ---
 
 ## Roadmap
 
-Several improvements are planned for future versions:
-
-**Dry run mode** — a flag that runs the full sequence for each device,
-verifying it can find every element and navigate every step, but stops short
-of the final confirmation. Allows a batch to be validated without actually
-erasing anything.
-
-**Retry queue** — devices that fail for recoverable reasons (Wi-Fi profile not
-loaded, search timeout) could be automatically re-attempted at the end of the
-run rather than requiring a manual rerun.
+Improvements planned for future versions:
 
 **Flexible CSV column handling** — currently the batch script expects a column 
 amed exactly Serial in a fixed position. Replacing this with case-insensitive 
