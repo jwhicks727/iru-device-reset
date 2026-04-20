@@ -5,7 +5,7 @@
 
 ## The Problem
 
-At SOAR Charter Academy, wiping and re-enrolling iPads is an important part of daily device workflow -- as a troubleshooting step, at a teacher's request to get a "fresh start" with their class devices, at times for the whole fleet between school years. Accomplishing this is a multi-step manual
+At SOAR Charter Academy, wiping and re-enrolling iPads is an important part of daily device workflow - as a troubleshooting step, at a teacher's request to get a "fresh start" with their class devices, at times for the whole fleet between school years. Accomplishing this is a multi-step manual
 process through our MDM platform's web interface — open the device, navigate
 menus, confirm multiple dialogs, select a Wi-Fi profile, type a confirmation
 word, submit. Manageable for one device, but creates a time-expensive friction point for an entire
@@ -112,16 +112,13 @@ at the end of the run with extended delays (2x normal timing) to give the system
 more time to stabilize. No manual rerun needed. Success tracked in reports with
 `[RETRIED]` badges and retry statistics.
 
+**✅ Flexible CSV column handling** — the batch script automatically detects the serial number column using case-insensitive header matching, handling variations like `Serial`, `SERIAL`, `Serial Number`, and `Device Serial` without requiring a fixed column name or position. If no matching column is found, the script reports which columns are available to help diagnose the issue.
+
 ---
 
 ## Roadmap
 
 Improvements planned for future versions:
-
-**Flexible CSV column handling** — currently the batch script expects a column 
-named exactly `Serial` in a fixed position. Replacing this with case-insensitive 
-header matching and position-independent column detection would make the script 
-more resilient to variations in how the CSV is exported or named.
 
 **File picker dialog** — currently the batch script looks for a fixed
 `devices.csv` in the project folder. A native macOS file picker dialog would

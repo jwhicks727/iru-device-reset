@@ -85,8 +85,23 @@ def main():
         serials = []
         with open(CSV_FILE, newline='') as f:
             reader = csv.DictReader(f)
+            
+            # Find the serial column case-insensitively
+            # Handles variations like "Serial", "SERIAL", "Serial Number", etc.
+            serial_column = None
+            for header in reader.fieldnames:
+                if 'serial' in header.lower():
+                    serial_column = header
+                    break
+            
+            if not serial_column:
+                print(f"Could not find a serial number column in {CSV_FILE}.")
+                print(f"Available columns: {', '.join(reader.fieldnames)}")
+                return
+            
+            print(f"Reading serials from column: '{serial_column}'")
             for row in reader:
-                serial = row['Serial'].strip().upper()
+                serial = row[serial_column].strip().upper()
                 if serial:
                     serials.append(serial)
 
