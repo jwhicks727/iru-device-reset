@@ -120,10 +120,7 @@ more time to stabilize. No manual rerun needed. Success tracked in reports with
 
 Improvements planned for future versions:
 
-**File picker dialog** — currently the batch script looks for a fixed
-`devices.csv` in the project folder. A native macOS file picker dialog would
-allow any CSV to be selected at runtime, making the workflow more flexible and
-less dependent on file placement.
+**✅ File picker dialog** — Native macOS file picker dialog allows selecting any CSV file at runtime instead of requiring a fixed `devices.csv` file. Uses AppleScript for authentic macOS experience with CSV file filtering and proper error handling for cancellations.
 
 **Standalone application** — packaging the scripts as a self-contained desktop
 application (macOS and potentially Windows) would allow a non-technical user to

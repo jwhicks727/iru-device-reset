@@ -1,6 +1,8 @@
 import argparse
 import csv
 import time
+import subprocess
+import os
 from datetime import datetime
 from erase_one_device import start_driver, navigate_to_devices, erase_device, find_element, IRU_URL
 
@@ -10,6 +12,44 @@ CSV_FILE = "devices.csv"
 
 
 # ── Helper Functions ───────────────────────────────────────────────────────────
+
+def get_csv_file_with_picker():
+    """Show native macOS file picker dialog to select a CSV file.
+    
+    Returns:
+        str: Path to selected CSV file, or None if user cancelled
+    """
+    try:
+        # AppleScript to show native macOS file picker
+        applescript = '''
+        tell application "System Events"
+            activate
+            set csvFile to choose file with prompt "Select the device CSV file:" ¬
+                of type {"csv"} ¬
+                default location (path to desktop folder)
+        end tell
+        return POSIX path of csvFile
+        '''
+        
+        result = subprocess.run(['osascript', '-e', applescript], 
+                              capture_output=True, text=True)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            file_path = result.stdout.strip()
+            if os.path.exists(file_path):
+                return file_path
+            else:
+                print(f"Selected file does not exist: {file_path}")
+                return None
+        else:
+            # User cancelled the dialog
+            return None
+            
+    except Exception as e:
+        print(f"File picker failed: {e}")
+        print("Falling back to default behavior...")
+        return None
+
 
 def is_recoverable_failure(reason):
     """Determine if a failure reason indicates a recoverable error that should be retried.
@@ -80,10 +120,20 @@ def main():
             time.sleep(0.1)
         print("Dashboard loaded.")
 
+        # ── Select CSV file ───────────────────────────────────────────────────
+        print("Select your device CSV file...")
+        csv_file_path = get_csv_file_with_picker()
+        
+        if not csv_file_path:
+            print("No CSV file selected. Exiting.")
+            return
+
+        print(f"Using CSV file: {csv_file_path}")
+
         # ── Read serials from CSV ────────────────────────────────────────────
-        # Reads the "Serial" column from the Iru device export CSV
+        # Reads the "Serial" column from the selected CSV file
         serials = []
-        with open(CSV_FILE, newline='') as f:
+        with open(csv_file_path, newline='') as f:
             reader = csv.DictReader(f)
             
             # Find the serial column case-insensitively
@@ -95,7 +145,7 @@ def main():
                     break
             
             if not serial_column:
-                print(f"Could not find a serial number column in {CSV_FILE}.")
+                print(f"Could not find a serial number column in {csv_file_path}.")
                 print(f"Available columns: {', '.join(reader.fieldnames)}")
                 return
             
