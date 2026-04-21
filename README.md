@@ -114,19 +114,19 @@ more time to stabilize. No manual rerun needed. Success tracked in reports with
 
 **✅ Flexible CSV column handling** — the batch script automatically detects the serial number column using case-insensitive header matching, handling variations like `Serial`, `SERIAL`, `Serial Number`, and `Device Serial` without requiring a fixed column name or position. If no matching column is found, the script reports which columns are available to help diagnose the issue.
 
+**✅ File picker dialog** — Native macOS file picker dialog allows selecting any CSV file at runtime instead of requiring a fixed `devices.csv` file. Uses AppleScript for authentic macOS experience with CSV file filtering and proper error handling for cancellations.
+
 ---
 
 ## Roadmap
 
 Improvements planned for future versions:
 
-**✅ File picker dialog** — Native macOS file picker dialog allows selecting any CSV file at runtime instead of requiring a fixed `devices.csv` file. Uses AppleScript for authentic macOS experience with CSV file filtering and proper error handling for cancellations.
+**Progress GUI** — Replace terminal output with a native macOS progress window. Show real-time status ("Processing device 3 of 12..."), visual progress bars, and success/failure icons as each device completes. Includes user-friendly cancellation support.
 
-**Standalone application** — packaging the scripts as a self-contained desktop
-application (macOS and potentially Windows) would allow a non-technical user to
-run the automation without needing Python, a terminal, or any development
-environment. Tools like PyInstaller or py2app make this possible from existing
-Python code.
+**Full Desktop App** — Package the automation as a standalone macOS application using PyInstaller. Double-click to launch without needing Python, terminal, or command-line knowledge. Integrates with the Dock and system file picker like any native app.
+
+**Report Viewer** — Add built-in HTML report viewing directly in the app instead of opening external browsers. Include export options (PDF, print, email), searchable report history, and a statistics dashboard showing success rates and device trends.
 
 **Multi-organization support** — the school subdomain, Wi-Fi profile name, and
 file paths are currently hardcoded constants. Abstracting these into a config
