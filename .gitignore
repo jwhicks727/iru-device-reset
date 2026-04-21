@@ -19,3 +19,4 @@ cookies.json
 .vscode/
 results/
 clock_ips.csv
+edge-profile.backup/
