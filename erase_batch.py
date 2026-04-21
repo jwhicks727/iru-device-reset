@@ -3,8 +3,10 @@ import csv
 import time
 import subprocess
 import os
+import threading
 from datetime import datetime
 from erase_one_device import start_driver, navigate_to_devices, erase_device, find_element, IRU_URL
+from progress_gui import ProgressWindow
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 # Path to the CSV exported from Iru containing the devices to erase
@@ -82,6 +84,8 @@ def main():
     parser = argparse.ArgumentParser(description="Batch device erase automation for Iru MDM")
     parser.add_argument("--dry-run", action="store_true", 
                         help="Run validation without actually erasing devices")
+    parser.add_argument("--no-gui", action="store_true",
+                        help="Use terminal output instead of progress window")
     args = parser.parse_args()
 
     driver, _ = start_driver()
@@ -171,17 +175,51 @@ def main():
             print(f"Cancelled. No devices were {run_mode}d.")
             return
 
+        # ── Initialize progress GUI (if enabled) ─────────────────────────────
+        gui_window = None
+        gui_thread = None
+        if not args.no_gui:
+            gui_window = ProgressWindow(len(serials), dry_run=args.dry_run)
+            gui_thread = threading.Thread(target=gui_window.show, daemon=True)
+            gui_thread.start()
+            # Give GUI a moment to initialize
+            time.sleep(0.5)
+
         # ── Erase each device ────────────────────────────────────────────────
         results = []
         for i, serial in enumerate(serials):
-            print(f"\n── Device {i + 1} of {len(serials)} ──────────────────")
+            if not args.no_gui:
+                gui_window.update_device_start(serial, i + 1, len(serials))
+            else:
+                print(f"\n── Device {i + 1} of {len(serials)} ──────────────────")
+            
             try:
                 success, reason = erase_device(driver, serial, dry_run=args.dry_run)
             except Exception as e:
-                print(f"Unexpected error while processing {serial}: {e}")
+                if not args.no_gui:
+                    error_msg = str(e)[:50]  # Truncate for display
+                    gui_window.update_device_end(serial, False, f"Error: {error_msg}")
+                else:
+                    print(f"Unexpected error while processing {serial}: {e}")
                 success, reason = False, f"Unexpected error: {e}"
+            
+            if success and not args.no_gui:
+                gui_window.update_device_end(serial, True)
+            elif not success and not args.no_gui:
+                gui_window.update_device_end(serial, False, reason)
+            elif not args.no_gui:
+                pass  # Already updated in exception handler
+            else:
+                status = "✓ Validated" if args.dry_run else "✓ Erased"
+                status = status if success else "✗ Failed"
+                print(f"  {status}: {serial}" + (f" — {reason}" if not success else ""))
 
             results.append((serial, success, reason))
+
+            # Check for cancellation from GUI
+            if gui_window and gui_window.is_cancelled():
+                print("\nOperation cancelled by user.")
+                break
 
             # Navigate back to devices page between erases
             # Skip navigation after the last device
@@ -195,14 +233,18 @@ def main():
                            if not ok and is_recoverable_failure(r)]
         
         if retry_candidates and not args.dry_run:
-            print(f"\n── Retry Queue ──────────────────────────────────────")
-            print(f"Found {len(retry_candidates)} device(s) with recoverable failures.")
-            print("Retrying automatically...")
+            if args.no_gui:
+                print(f"\n── Retry Queue ──────────────────────────────────────")
+                print(f"Found {len(retry_candidates)} device(s) with recoverable failures.")
+                print("Retrying automatically...")
             
             retry_results = []
             for i, (serial, original_reason) in enumerate(retry_candidates):
-                print(f"\n── Retry {i + 1} of {len(retry_candidates)} ────────────────")
-                print(f"Retrying {serial} (original failure: {original_reason})")
+                if args.no_gui:
+                    print(f"\n── Retry {i + 1} of {len(retry_candidates)} ────────────────")
+                    print(f"Retrying {serial} (original failure: {original_reason})")
+                elif gui_window:
+                    gui_window.update_device_start(serial, i + 1, len(retry_candidates))
                 
                 # Navigate back to devices page for retry
                 navigate_to_devices(driver)
@@ -211,10 +253,18 @@ def main():
                 try:
                     success, reason = erase_device(driver, serial, dry_run=False, retry_attempt=True)
                 except Exception as e:
-                    print(f"Unexpected error during retry for {serial}: {e}")
+                    if args.no_gui:
+                        print(f"Unexpected error during retry for {serial}: {e}")
                     success, reason = False, f"Retry failed: {e}"
 
                 retry_results.append((serial, success, reason))
+                
+                # Update GUI with retry result
+                if gui_window and not args.no_gui:
+                    if success:
+                        gui_window.update_device_end(serial, True, "[RETRIED]")
+                    else:
+                        gui_window.update_device_end(serial, False, f"Retry failed: {reason}")
             
             # Update main results with retry outcomes
             for retry_serial, retry_success, retry_reason in retry_results:
@@ -228,22 +278,34 @@ def main():
                         break
 
         # ── Summary ──────────────────────────────────────────────────────────
-        run_mode = "Validation" if args.dry_run else "Erase"
-        print(f"\n── {run_mode} Summary ────────────────────────────────────")
-        for serial, success, reason in results:
-            status_word = "✓ Validated" if args.dry_run else "✓ Erased"
-            status = status_word if success else "✗ Failed"
-            print(f"  {status}: {serial}" + (f" — {reason}" if not success else ""))
-
         failed = [(s, r) for s, ok, r in results if not ok]
+        successful = len(results) - len(failed)
+        
+        # Update GUI with final summary
+        if gui_window and not args.no_gui:
+            gui_window.update_complete({
+                "total": len(results),
+                "successful": successful,
+                "failed": len(failed)
+            })
+        
+        # Also print summary to console
+        run_mode = "Validation" if args.dry_run else "Erase"
+        if args.no_gui:
+            print(f"\n── {run_mode} Summary ────────────────────────────────────")
+            for serial, success, reason in results:
+                status_word = "✓ Validated" if args.dry_run else "✓ Erased"
+                status = status_word if success else "✗ Failed"
+                print(f"  {status}: {serial}" + (f" — {reason}" if not success else ""))
+        
         if failed:
-            print(f"\n{len(failed)} device(s) failed — check above for details.")
+            print(f"\n{len(failed)} device(s) failed — check reports for details.")
         else:
             action = "validated" if args.dry_run else "erased"
-            print(f"\nAll {len(serials)} devices {action} successfully.")
+            print(f"\nAll {len(results)} devices {action} successfully.")
 
         # Show retry summary if retries were attempted
-        if not args.dry_run and retry_candidates:
+        if not args.dry_run and retry_candidates and args.no_gui:
             successful_retries = sum(1 for s, ok, r in results 
                                     if ok and "Success on retry" in r)
             failed_retries = len(retry_candidates) - successful_retries
@@ -262,8 +324,14 @@ def main():
         print("Unexpected error:", e)
 
     finally:
-        print("\nBrowser will stay open until you press Enter.")
-        input("Press Enter to close browser...")
+        # Wait for GUI to be closed if it was shown
+        if gui_window and gui_thread and gui_thread.is_alive():
+            gui_thread.join(timeout=1)
+        
+        if args.no_gui:
+            print("\nBrowser will stay open until you press Enter.")
+            input("Press Enter to close browser...")
+        
         driver.quit()
 
 
