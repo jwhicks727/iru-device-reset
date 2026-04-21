@@ -18,6 +18,9 @@ def start_driver():
     """Launch Edge using a persistent profile so we stay logged in between runs."""
     options = Options()
     options.add_argument(f"--user-data-dir={PROFILE_DIR}")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    options.use_chromium = True
     service = Service("/Users/jasonhicks/Projects/msedgedriver/edgedriver_mac64/msedgedriver")
     driver = webdriver.Edge(service=service, options=options)
     wait = WebDriverWait(driver, 10)
