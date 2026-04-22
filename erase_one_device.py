@@ -9,7 +9,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 # ── Configuration ──────────────────────────────────────────────────────────────
 # Change these values to target a different environment
 IRU_URL = "https://soarcharteracademy.iru.com"
-PROFILE_DIR = "/Users/jasonhicks/Projects/iru-automation/edge-profile"
+PROFILE_DIR = "/Users/jasonhicks/Projects/iru-device-reset/edge-profile"
 
 
 # ── Helper Functions ───────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ def set_input_value(driver, element, value):
         arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
     """, element, value)
 
-def navigate_to_devices(driver):
+def navigate_to_devices(driver, log=print):
     """Navigate back to the main Devices page by clicking the Devices nav item.
     Used between erases in batch mode to reset to a clean state."""
     devices_link = driver.execute_script("""
@@ -59,7 +59,7 @@ def navigate_to_devices(driver):
         return null;
     """)
     if not devices_link:
-        print("Devices nav link not found, navigating directly...")
+        log("Devices nav link not found, navigating directly...")
         driver.get(IRU_URL)
     else:
         js_click(driver, devices_link)
@@ -69,9 +69,9 @@ def navigate_to_devices(driver):
         if find_element(driver, 'input[aria-label="Search"]'):
             break
         time.sleep(0.1)
-    print("Back on Devices page.")
+    log("Back on Devices page.")
 
-def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
+def erase_device(driver, serial_number, dry_run=False, retry_attempt=False, log=print):
     """Run the full erase sequence for a single device.
     Accepts an already-running driver, a serial number string, and optional flags.
     If dry_run is True, validates all steps but skips the final confirmation button click.
@@ -83,9 +83,9 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
     poll_delay = 0.2 if retry_attempt else 0.1
     wait_multiplier = 2 if retry_attempt else 1
 
-    print(f"\nStarting erase sequence for {serial_number}...")
+    log(f"\nStarting erase sequence for {serial_number}...")
     if retry_attempt:
-        print("[RETRY ATTEMPT] Using extended delays...")
+        log("[RETRY ATTEMPT] Using extended delays...")
 
     # ── Step 1: Search for the device by serial number ──────────────────
     # Retry up to 3 times in case the search field isn't ready yet
@@ -94,17 +94,17 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
         search_field = find_element(driver, 'input[aria-label="Search"]')
         if search_field:
             break
-        print(f"Search field not ready, attempt {attempt + 1}...")
+        log(f"Search field not ready, attempt {attempt + 1}...")
         time.sleep(1)
 
     if not search_field:
-        print("Search field not found. Skipping.")
+        log("Search field not found. Skipping.")
         return False, "Search field not found"
 
     # Wait for device list to fully load before typing
     time.sleep(base_delay)
     set_input_value(driver, search_field, serial_number)
-    print("Serial number entered.")
+    log("Serial number entered.")
 
     # Wait for search results to populate with the correct serial number
     matched_device_link = None
@@ -138,11 +138,11 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
     # Find the row whose visible text contains the serial, then click its link
     device_link = matched_device_link
     if not device_link:
-        print(f"Device {serial_number} not found in filtered results. Skipping.")
+        log(f"Device {serial_number} not found in filtered results. Skipping.")
         return False, "Device not found in search results"
 
     driver.execute_script("arguments[0].click();", device_link)
-    print("Device clicked.")
+    log("Device clicked.")
 
     # Wait for the device detail page to load
     for attempt in range(50):
@@ -153,11 +153,11 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
     # ── Step 3: Open the Actions menu ───────────────────────────────────
     actions_button = find_element(driver, '[aria-label="actions"]')
     if not actions_button:
-        print("Actions button not found. Skipping.")
+        log("Actions button not found. Skipping.")
         return False, "Actions button not found"
 
     js_click(driver, actions_button)
-    print("Actions menu opened.")
+    log("Actions menu opened.")
     time.sleep(1.0 * wait_multiplier)  # Allow dropdown to render before checking items
 
     # Wait for the Actions dropdown to fully render including Erase device option
@@ -190,11 +190,11 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
         return null;
     """)
     if not erase_button:
-        print("Erase device option not found. Skipping.")
+        log("Erase device option not found. Skipping.")
         return False, "Erase device option not found"
 
     js_click(driver, erase_button)
-    print("Erase device clicked.")
+    log("Erase device clicked.")
 
     # Wait for the confirmation dialog to appear
     for attempt in range(50):
@@ -206,22 +206,22 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
     # Using the element's id attribute as the selector (# means id in CSS)
     checkbox = find_element(driver, '#return-to-service')
     if not checkbox:
-        print("Checkbox not found. Skipping.")
+        log("Checkbox not found. Skipping.")
         return False, "Return to service checkbox not found"
 
     js_click(driver, checkbox)
-    print("Checkbox checked.")
+    log("Checkbox checked.")
     time.sleep(base_delay)  # Wait for Wi-Fi dropdown to become active after checking
 
     # ── Step 6: Open the Wi-Fi profile dropdown ───────────────────────────
     # This is a combobox for selecting a Wi-Fi profile for re-enrollment
     wifi_dropdown = find_element(driver, '[aria-label="Select a Wi-Fi Profile for re-enrollment (optional)"]')
     if not wifi_dropdown:
-        print("Wi-Fi dropdown not found. Skipping.")
+        log("Wi-Fi dropdown not found. Skipping.")
         return False, "Wi-Fi dropdown not found"
 
     js_click(driver, wifi_dropdown)
-    print("Wi-Fi dropdown opened.")
+    log("Wi-Fi dropdown opened.")
 
     # Wait for SOAR Charter option to appear in the dropdown
     for attempt in range(50):
@@ -248,11 +248,11 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
         return null;
     """)
     if not wifi_option:
-        print("SOAR Charter option not found. Skipping.")
+        log("SOAR Charter option not found. Skipping.")
         return False, "Wi-Fi profile not loaded — rerun when profile is available"
 
     js_click(driver, wifi_option)
-    print("SOAR Charter Wi-Fi profile selected.")
+    log("SOAR Charter Wi-Fi profile selected.")
     time.sleep(base_delay)  # Wait for selection to register before continuing
 
     # ── Step 8: Type ERASE in the confirmation field ─────────────────────
@@ -264,11 +264,11 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
 
     erase_field = find_element(driver, '[aria-label="erase-confirmation"]')
     if not erase_field:
-        print("Erase confirmation field not found. Skipping.")
+        log("Erase confirmation field not found. Skipping.")
         return False, "Erase confirmation field not found"
 
     set_input_value(driver, erase_field, "ERASE")
-    print("ERASE typed.")
+    log("ERASE typed.")
 
     # ── Step 9: Click the final "Erase Device" confirmation button ────────
     # No unique aria-label on this button, so we find it by its text content
@@ -283,15 +283,15 @@ def erase_device(driver, serial_number, dry_run=False, retry_attempt=False):
         return null;
     """)
     if not confirm_button:
-        print("Confirm erase button not found. Skipping.")
+        log("Confirm erase button not found. Skipping.")
         return False, "Confirm erase button not found"
 
     if dry_run:
-        print(f"[DRY RUN] Would erase device {serial_number} — all validation steps passed.")
+        log(f"[DRY RUN] Would erase device {serial_number} — all validation steps passed.")
         return True, "Dry run validation successful"
 
     js_click(driver, confirm_button)
-    print(f"Erase Device confirmed. Device wipe initiated for {serial_number}.")
+    log(f"Erase Device confirmed. Device wipe initiated for {serial_number}.")
     time.sleep(1 * wait_multiplier)
 
     return True, "Success"

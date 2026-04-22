@@ -1,4 +1,4 @@
-# MDM Device Reset Automation
+YES# MDM Device Reset Automation
 **Python · Selenium · JavaScript · Microsoft Edge**
 
 ---
@@ -91,6 +91,37 @@ with instructions to rerun rather than just appearing as a generic failure.
 
 ---
 
+## Setup & Usage
+
+### Requirements
+- Python 3.x
+- Microsoft Edge + msedgedriver
+- Selenium (`pip install selenium`)
+- weasyprint (`pip install weasyprint`)
+
+### First Run
+1. Clone the repository
+2. Place msedgedriver in the path specified in the script
+3. Run `python3 erase_one_device.py` 
+4. Log in manually when prompted — your session will be saved for future runs
+
+### Single Device
+```bash
+python3 erase_one_device.py
+```
+Enter the serial number when prompted.
+
+### Batch Mode
+1. Export your device list from Iru as a CSV
+2. Save it as `devices.csv` in the project folder
+3. Run:
+```bash
+python3 erase_batch.py
+```
+Reports are saved to the `reports/` folder.
+
+---
+
 ## Status
 
 In active use at SOAR Charter Academy. Stress tested across multiple batch runs
@@ -116,13 +147,13 @@ more time to stabilize. No manual rerun needed. Success tracked in reports with
 
 **✅ File picker dialog** — Native macOS file picker dialog allows selecting any CSV file at runtime instead of requiring a fixed `devices.csv` file. Uses AppleScript for authentic macOS experience with CSV file filtering and proper error handling for cancellations.
 
+**✅ Progress GUI** — Native macOS progress window replaces terminal output in GUI mode. Shows real-time status ("Processing device 3 of 12..."), visual progress bar, and success/failure results as each device completes. Detailed step-by-step log output scrolls in real time. Includes user-friendly cancellation support. Terminal mode remains available via `--no-gui` flag.
+
 ---
 
 ## Roadmap
 
 Improvements planned for future versions:
-
-**Progress GUI** — Replace terminal output with a native macOS progress window. Show real-time status ("Processing device 3 of 12..."), visual progress bars, and success/failure icons as each device completes. Includes user-friendly cancellation support.
 
 **Full Desktop App** — Package the automation as a standalone macOS application using PyInstaller. Double-click to launch without needing Python, terminal, or command-line knowledge. Integrates with the Dock and system file picker like any native app.
 

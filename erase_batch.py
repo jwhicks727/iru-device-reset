@@ -4,8 +4,6 @@ import time
 import subprocess
 import os
 import threading
-import tkinter as tk
-from tkinter import filedialog
 from datetime import datetime
 from erase_one_device import start_driver, navigate_to_devices, erase_device, find_element, IRU_URL
 from progress_gui import ProgressWindow
@@ -107,7 +105,10 @@ def run_automation(driver, serials, args, gui_window, results, run_timestamp):
         run_timestamp: datetime of run start for report naming
     """
     try:
-        # ── Erase each device ────────────────────────────────────────────────
+        # ── Erase each device ─────
+
+        log_fn = gui_window.log if gui_window else print
+
         for i, serial in enumerate(serials):
             # Check for cancellation
             if gui_window and gui_window.is_cancelled():
@@ -120,7 +121,7 @@ def run_automation(driver, serials, args, gui_window, results, run_timestamp):
                 print(f"\n── Device {i + 1} of {len(serials)} ──────────────────")
 
             try:
-                success, reason = erase_device(driver, serial, dry_run=args.dry_run)
+                success, reason = erase_device(driver, serial, dry_run=args.dry_run, log=log_fn)
             except Exception as e:
                 print(f"Unexpected error while processing {serial}: {e}")
                 success, reason = False, f"Unexpected error: {e}"
@@ -135,54 +136,61 @@ def run_automation(driver, serials, args, gui_window, results, run_timestamp):
 
             # Navigate back between devices
             if i < len(serials) - 1:
-                navigate_to_devices(driver)
+                navigate_to_devices(driver, log=log_fn)
                 time.sleep(1)
 
         # ── Retry queue for recoverable failures ─────────────────────────────
-        retry_candidates = [(s, r) for s, ok, r in results
-                            if not ok and is_recoverable_failure(r)]
+        if not args.dry_run:
+            max_retry_rounds = 4
 
-        if retry_candidates and not args.dry_run:
-            print(f"\n── Retry Queue ──────────────────────────────────────")
-            print(f"Found {len(retry_candidates)} device(s) with recoverable failures. Retrying...")
+            for retry_round in range(1, max_retry_rounds + 1):
+                retry_candidates = [(s, r) for s, ok, r in results
+                                    if not ok and is_recoverable_failure(r)]
 
-            retry_results = []
-            for i, (serial, original_reason) in enumerate(retry_candidates):
+                if not retry_candidates:
+                    break
+
+                print(f"\n── Retry Round {retry_round} of {max_retry_rounds} ──────────────────────────────")
+                print(f"{len(retry_candidates)} device(s) with recoverable failures. Retrying...")
+
+                for i, (serial, original_reason) in enumerate(retry_candidates):
+                    if gui_window and gui_window.is_cancelled():
+                        break
+
+                    if gui_window:
+                        gui_window.log(f"\n[Retry round {retry_round}] {serial}", "device")
+                        gui_window.update_device_start(serial, i + 1, len(retry_candidates))
+                    else:
+                        print(f"\n── Retry {i + 1} of {len(retry_candidates)} (round {retry_round}) ────────────────")
+                        print(f"Retrying {serial} (original failure: {original_reason})")
+
+                    navigate_to_devices(driver, log=log_fn)
+                    time.sleep(1)
+
+                    try:
+                        success, reason = erase_device(driver, serial, dry_run=False, retry_attempt=True, log=log_fn)
+                    except Exception as e:
+                        print(f"Unexpected error during retry for {serial}: {e}")
+                        success, reason = False, f"Retry failed: {e}"
+
+                    if gui_window:
+                        if success:
+                            gui_window.update_device_end(serial, True, f"[RETRIED round {retry_round}]")
+                        else:
+                            gui_window.update_device_end(serial, False, f"Retry failed: {reason}")
+
+                    # Update the result in place
+                    for j, (orig_serial, orig_success, orig_reason) in enumerate(results):
+                        if orig_serial == serial and not orig_success:
+                            if success:
+                                results[j] = (serial, True, f"Success on retry round {retry_round} (original: {original_reason})")
+                            else:
+                                results[j] = (serial, False, f"Retry round {retry_round} failed: {reason} (original: {original_reason})")
+                            break
+
                 if gui_window and gui_window.is_cancelled():
                     break
 
-                if gui_window:
-                    gui_window.update_device_start(serial, i + 1, len(retry_candidates))
-                else:
-                    print(f"\n── Retry {i + 1} of {len(retry_candidates)} ────────────────")
-                    print(f"Retrying {serial} (original failure: {original_reason})")
-
-                navigate_to_devices(driver)
-                time.sleep(1)
-
-                try:
-                    success, reason = erase_device(driver, serial, dry_run=False, retry_attempt=True)
-                except Exception as e:
-                    print(f"Unexpected error during retry for {serial}: {e}")
-                    success, reason = False, f"Retry failed: {e}"
-
-                retry_results.append((serial, success, reason))
-
-                if gui_window:
-                    if success:
-                        gui_window.update_device_end(serial, True, "[RETRIED]")
-                    else:
-                        gui_window.update_device_end(serial, False, f"Retry failed: {reason}")
-
-            # Update main results with retry outcomes
-            for retry_serial, retry_success, retry_reason in retry_results:
-                for j, (orig_serial, orig_success, orig_reason) in enumerate(results):
-                    if orig_serial == retry_serial:
-                        if retry_success:
-                            results[j] = (orig_serial, True, f"Success on retry (original: {orig_reason})")
-                        else:
-                            results[j] = (orig_serial, False, f"Retry failed: {retry_reason} (original: {orig_reason})")
-                        break
 
         # ── Summary ──────────────────────────────────────────────────────────
         failed = [(s, r) for s, ok, r in results if not ok]
@@ -211,22 +219,15 @@ def run_automation(driver, serials, args, gui_window, results, run_timestamp):
             action = "validated" if args.dry_run else "erased"
             print(f"\nAll {len(results)} devices {action} successfully.")
 
-        # Retry summary for terminal mode
-        if not args.dry_run and retry_candidates and not gui_window:
-            successful_retries = sum(1 for s, ok, r in results if ok and "Success on retry" in r)
-            failed_retries = len(retry_candidates) - successful_retries
-            print(f"\n── Retry Summary ─────────────────────────────────────")
-            print(f"Devices retried: {len(retry_candidates)}")
-            print(f"Successful retries: {successful_retries}")
-            print(f"Failed retries: {failed_retries}")
-
         # ── Generate reports ─────────────────────────────────────────────────
         from report_generator import generate_reports
         report_dir = generate_reports(results, run_timestamp, dry_run=args.dry_run)
         print(f"\nReports saved to: {report_dir}")
 
     except Exception as e:
+        import traceback
         print(f"Unexpected error in automation: {e}")
+        print(traceback.format_exc())
 
     finally:
         # Close browser
@@ -328,6 +329,7 @@ def main():
             print(f"  {s}")
 
         # Confirm before proceeding
+        subprocess.run(['osascript', '-e', 'tell application "Terminal" to activate'], capture_output=True)
         run_mode = "validate (dry run)" if args.dry_run else "erase"
         confirm = input(f"\nType YES to {run_mode} all {len(serials)} devices: ").strip().upper()
         if confirm != "YES":
