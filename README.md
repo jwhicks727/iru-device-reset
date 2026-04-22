@@ -1,4 +1,4 @@
-YES# MDM Device Reset Automation
+# MDM Device Reset Automation
 **Python · Selenium · JavaScript · Microsoft Edge**
 
 ---
