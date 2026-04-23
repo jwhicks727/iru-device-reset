@@ -38,13 +38,6 @@ separated.
 
 This was my second Python project and the first using the Selenium framework.
 
-I worked through these problems methodically: inspect the element, understand
-what it's actually listening for, find the right approach, test it. I used AI
-coding partners — Claude, GitHub Copilot, and ChatGPT at different points — as
-a resource throughout. Managing those tools, evaluating conflicting suggestions,
-and keeping the project moving when one got stuck is itself a skill I
-refined during the work.
-
 Before any automation could begin, the MDM platform's authentication had to be 
 addressed. The Devices screen sits behind a Google SSO login with mandatory 
 two-step verification — a security layer that needed to be respected rather than 
